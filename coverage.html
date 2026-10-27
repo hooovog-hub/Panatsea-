@@ -77,6 +77,11 @@ h3{font-size:13px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.06e
  body{grid-template-columns:1fr;grid-template-rows:52dvh 1fr}
  #wrap{order:-1}
  aside{border-right:0;border-top:1px solid var(--line)}
+ html,body{height:auto}
+ body{display:flex;flex-direction:column;height:auto;min-height:100dvh}
+ #wrap{order:-1;height:55dvh;flex:none}
+ aside{flex:none;min-height:0}
+ .pane{overflow:visible;flex:none;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
  .layers{top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));right:12px;font-size:12px}
 }
 </style></head><body>
