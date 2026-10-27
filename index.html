@@ -71,17 +71,12 @@ select:focus-visible,button:focus-visible{outline:2px solid var(--ours);outline-
 <aside>
  <header>
   <div><h1>Панацея: продукты по зонам</h1>
-  <div class="sub">Город разбит на зоны примерно по 1 км. Выберите продукт или группу, и карта покажет, где он сильный, где слабый и в какие точки его стоит добавить.</div>
+  <div class="sub">Выберите продукт или группу, и карта покажет, в каких ваших точках он есть, где его нет и куда его стоит добавить.</div>
   <div class="sub"><b style="color:var(--fg)">Кружки — только ваши 104 точки из таблицы</b> (ещё 15 вне Еревана). Квадраты — чужие магазины без Панацеи.</div></div>
   <div class="filt">
    <label class="w">Продукт или группа<select id="fProd"></select></label>
    <label>Сеть<select id="fChain"></select></label>
    <label>Район<select id="fDist"></select></label>
-   <div class="seg" id="fMode">
-    <button data-m="str">Сила продукта</button>
-    <button data-m="share" class="on">Доля полок</button>
-    <button data-m="add">Что добавить</button>
-   </div>
    <div class="seg show" id="fShow">
     <button data-v="all" class="on">Все наши точки</button>
     <button data-v="has">Где есть <span id="cHas"></span></button>
@@ -105,7 +100,6 @@ select:focus-visible,button:focus-visible{outline:2px solid var(--ours);outline-
  <details class="layers" id="lay" open><summary>Слои карты</summary>
   <span class="cap">Радиус доступности</span>
   <div class="seg" id="radSeg"><button data-r="200" class="on">200 м</button><button data-r="500">500 м</button><button data-r="1000">1 км</button></div>
-  <label><input type="checkbox" id="L-hex" checked><span class="sw sq" style="background:var(--mid)"></span>Зоны по продукту</label>
   <label><input type="checkbox" id="L-ours" checked><span class="sw" style="background:var(--ours)"></span>Точки Панацеи</label>
   <label><input type="checkbox" id="L-rad" checked><span class="sw" style="border:2px solid var(--ours)"></span><span id="radLbl">Радиус 200 м</span></label>
   <label><input type="checkbox" id="L-no5" checked><span class="sw" style="border:2px dashed var(--no)"></span>500 м вокруг точек без продукта</label>
@@ -141,7 +135,7 @@ document.getElementById('fDist').innerHTML='<option value="">Весь город
 fP.onchange=e=>{S.prod=e.target.value;update()};
 document.getElementById('fChain').onchange=e=>{S.chain=e.target.value;update()};
 document.getElementById('fDist').onchange=e=>{S.dist=e.target.value;update(true)};
-document.querySelectorAll('#fMode button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;document.querySelectorAll('#fMode button').forEach(x=>x.classList.toggle('on',x===b));update()});
+[].forEach(b=>b.onclick=()=>{S.mode=b.dataset.m;[].forEach(x=>x.classList.toggle('on',x===b));update()});
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{S.tab=b.dataset.t;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));['no','act','mx','zn'].forEach(t=>document.getElementById('p-'+t).hidden=t!==S.tab)});
 
 /* ---------- map ---------- */
@@ -163,7 +157,7 @@ for(let row=0,lat=40.08;lat<40.25;row++,lat+=dLat*1.5){
 }
 const storeLayer=L.layerGroup().addTo(map);
 D.ours.forEach(p=>{p.m=L.circleMarker([p.lat,p.lng],{radius:5,weight:1.5}).addTo(storeLayer)});
-const hexLayer=L.layerGroup(hexes.map(h=>h.layer)).addTo(map);
+
 const radLayer=L.layerGroup().addTo(map);
 const no5Layer=L.layerGroup().addTo(map);
 const pcLayer=L.layerGroup().addTo(map),nwLayer=L.layerGroup().addTo(map);
@@ -185,7 +179,7 @@ const Gap=L.Layer.extend({
  }
 });
 const gap=new Gap();
-[['L-no5',no5Layer],['L-hex',hexLayer],['L-ours',storeLayer],['L-rad',radLayer],['L-gap',gap],['L-pc',pcLayer],['L-nw',nwLayer]].forEach(([id,l])=>{
+[['L-no5',no5Layer],['L-ours',storeLayer],['L-rad',radLayer],['L-gap',gap],['L-pc',pcLayer],['L-nw',nwLayer]].forEach(([id,l])=>{
  document.getElementById(id).onchange=e=>e.target.checked?l.addTo(map):l.remove();
 });
 document.querySelectorAll('#radSeg button').forEach(b=>b.onclick=()=>{R=+b.dataset.r;document.querySelectorAll('#radSeg button').forEach(x=>x.classList.toggle('on',x===b));update()});
@@ -264,7 +258,7 @@ function renderZn(){
  const z=hexes.filter(h=>!S.dist||h.d===S.dist).map(h=>({h,st:hexState(h)})).filter(x=>x.st.own>0&&x.st.miss.length).sort((a,b)=>b.st.miss.length-a.st.miss.length||a.st.withP-b.st.withP);
  el.innerHTML=`<p class="note">Зоны, где наши точки есть, но «${esc(label())}» стоит не везде. Это быстрый рост: договор уже есть, нужно расширить полку.</p>`+
  (z.length?z.slice(0,60).map((x,i)=>`<div class="st" data-i="${hexes.indexOf(x.h)}"><div><b>${esc(x.h.d)}</b> · зона ${i+1}</div><small>${x.st.own} наших точек, в ${x.st.miss.length} не хватает · с продуктом рядом: ${x.st.withP}</small><div class="chips">${x.st.miss.slice(0,4).map(p=>`<span class="ch">${esc(p.c)}, ${esc(p.a)}</span>`).join('')}</div></div>`).join(''):'<p class="note">Пробелов нет.</p>');
- el.querySelectorAll('.st').forEach(x=>x.onclick=()=>{const h=hexes[+x.dataset.i];map.setView([h.lat,h.lng],15);h.layer.openPopup([h.lat,h.lng])});
+ el.querySelectorAll('.st').forEach(x=>x.onclick=()=>{const h=hexes[+x.dataset.i];map.setView([h.lat,h.lng],15);L.popup().setLatLng([h.lat,h.lng]).setContent(hexPopup(h)).openOn(map)});
 }
 
 /* ---------- update ---------- */
@@ -302,7 +296,7 @@ function update(zoom){
  document.getElementById('radLbl').textContent='Радиус '+lab;
  document.getElementById('gapLbl').textContent=`Белые зоны (дальше ${lab} от «${label()}»)`;
  if(map.hasLayer(gap))gap.draw();
- document.getElementById('legend').innerHTML=LEG[S.mode].map(([c,t])=>`<span><i style="background:${c};${c==='transparent'?'border:1px solid '+C.muted:''}"></i>${t}</span>`).join('')+`<span style="flex-basis:100%;height:0"></span><span>Ваша точка:</span><span><i style="background:${C.strong};border-radius:50%"></i>продукт есть</span>`+(prods().length>1?`<span><i style="background:${C.weak};border:2px solid ${C.strong};border-radius:50%"></i>есть часть</span>`:'')+`<span><i style="background:${C.no};border-radius:50%"></i>продукта нет</span><span><i style="border:2px dashed ${C.no};border-radius:50%"></i>500 м вокруг</span>`;
+ document.getElementById('legend').innerHTML=`<span>Ваша точка:</span><span><i style="background:${C.strong};border-radius:50%"></i>продукт есть</span>`+(prods().length>1?`<span><i style="background:${C.weak};border:2px solid ${C.strong};border-radius:50%"></i>есть часть</span>`:'')+`<span><i style="background:${C.no};border-radius:50%"></i>продукта нет</span><span><i style="border:2px dashed ${C.no};border-radius:50%"></i>500 м вокруг</span>`;
  const sc=D.ours.filter(inScope);document.getElementById('cHas').textContent='· '+sc.filter(p=>fit(p)>=.999).length;document.getElementById('cNo').textContent='· '+sc.filter(p=>fit(p)<.999).length;
  renderNo();renderAct();renderMx();renderZn();
  if(zoom){const ps=D.ours.filter(inScope);if(ps.length)map.fitBounds(ps.map(p=>[p.lat,p.lng]),{padding:[40,40],maxZoom:15})}
