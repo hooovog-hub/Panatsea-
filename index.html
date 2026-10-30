@@ -28,6 +28,7 @@ select:focus-visible,button:focus-visible{outline:2px solid var(--ours);outline-
 .seg.show span{font-family:var(--mono);font-weight:500;opacity:.8}
 .xbtn{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--ours);background:transparent;color:var(--ours);font:600 13px var(--sans);padding:9px;border-radius:9px;cursor:pointer}
 .xbtn:hover{background:color-mix(in srgb,var(--ours) 10%,transparent)}
+.xhint{grid-column:1/-1;font-size:12px;line-height:1.4;color:var(--muted);background:var(--soft);border-radius:8px;padding:7px 9px}
 .xbtn .xc{font:500 12px var(--mono);opacity:.75}
 .cg{margin:14px 0 2px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}
@@ -91,6 +92,7 @@ select:focus-visible,button:focus-visible{outline:2px solid var(--ours);outline-
     <button data-v="no">Где нет <span id="cNo"></span></button>
    </div>
    <button class="xbtn" id="xBtn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span>Экспорт в Excel</span><span class="xc" id="xCount"></span></button>
+   <div class="xhint" id="xHint" hidden></div>
   </div>
   <div class="legend" id="legend"></div>
   <nav class="tabs">
@@ -281,33 +283,38 @@ function exportRows(){
 }
 function doExport(){
  if(!window.XLSX){alertBox('Не удалось загрузить модуль Excel. Проверьте интернет и обновите страницу.');return}
- const ps=prods(),lab=label(),rows=exportRows();
+ const ps=prods(),lab=label(),multi=ps.length>1;
+ const rows=exportRows().map(p=>({p,miss:ps.filter(z=>!p.h.includes(z)),has:ps.filter(z=>p.h.includes(z))}))
+  .sort((a,b)=>b.miss.length-a.miss.length||a.p.c.localeCompare(b.p.c)||a.p.d.localeCompare(b.p.d));
  const showTxt={all:'Все наши точки',has:'Где есть',no:'Где нет'}[S.show];
- const data=rows.map((p,i)=>{
-  const f=fit(p),miss=ps.filter(z=>!p.h.includes(z));
-  const o={'№':i+1,'Сеть':p.c,'Адрес':p.a,'Район':p.d,[`«${lab}»`]:f>=.999?'Есть':f>0?'Частично':'Нет'};
-  if(ps.length>1)o['Чего нет из выбранного']=miss.join(', ')||'—';
-  ALLP.forEach(z=>o[z]=p.h.includes(z)?'✓':'—');
-  o['Продуктов из 19']=p.h.length;
+ const st=r=>r.miss.length===0?'Есть':r.has.length===0?'Нет':'Есть не всё';
+ /* Лист 1: коротко — магазин и чего не хватает */
+ const main=rows.map((r,i)=>{
+  const o={'№':i+1,'Сеть':r.p.c,'Адрес':r.p.a,'Район':r.p.d};
+  if(multi){o['Статус']=st(r);o['Не хватает (шт.)']=`${r.miss.length} из ${ps.length}`;o['Чего нет']=r.miss.join(', ')||'—';o['Что есть']=r.has.join(', ')||'—'}
+  else o[lab]=r.miss.length?'НЕТ':'Есть';
   return o;
  });
  const wb=XLSX.utils.book_new();
- const ws=XLSX.utils.json_to_sheet(data.length?data:[{'Сообщение':'По выбранным фильтрам точек нет'}]);
- const keys=Object.keys(data[0]||{'Сообщение':1});
- ws['!cols']=keys.map(k=>({wch:k==='Адрес'?34:k==='Чего нет из выбранного'?40:k==='Сеть'||k==='Район'?20:k==='№'?5:Math.max(8,Math.min(16,k.length+2))}));
+ const ws=XLSX.utils.json_to_sheet(main.length?main:[{'Сообщение':'По выбранным фильтрам точек нет'}]);
+ const keys=Object.keys(main[0]||{'Сообщение':1});
+ const W={'№':5,'Сеть':18,'Адрес':34,'Район':22,'Статус':13,'Не хватает (шт.)':15,'Чего нет':60,'Что есть':60};
+ ws['!cols']=keys.map(k=>({wch:W[k]||14}));
  ws['!autofilter']={ref:ws['!ref']};
- XLSX.utils.book_append_sheet(wb,ws,'Точки');
+ XLSX.utils.book_append_sheet(wb,ws,'Магазины');
+ /* Лист 2: подробно по каждому продукту, словами */
+ const det=rows.map((r,i)=>{const o={'№':i+1,'Сеть':r.p.c,'Адрес':r.p.a,'Район':r.p.d};ps.forEach(z=>o[z]=r.p.h.includes(z)?'есть':'НЕТ');return o});
+ if(det.length&&multi){const w2=XLSX.utils.json_to_sheet(det);w2['!cols']=Object.keys(det[0]).map(k=>({wch:W[k]||Math.max(9,Math.min(16,k.length+2))}));w2['!autofilter']={ref:w2['!ref']};XLSX.utils.book_append_sheet(wb,w2,'По продуктам')}
  const meta=XLSX.utils.aoa_to_sheet([
   ['Выгрузка с карты «Панацея: продукты по зонам»'],[],
   ['Продукт или группа',lab],['Входит в выбор',ps.join(', ')],['Сеть',S.chain||'Все сети'],['Район',S.dist||'Весь город'],['Показ',showTxt],
-  ['Строк',rows.length],['Точки вне Еревана',(!S.dist||S.dist==='Вне Еревана')?'включены (на карте их нет)':'не включены'],['Дата выгрузки',new Date().toLocaleString('ru-RU')],[],
-  ['Как читать','✓ — точка берёт продукт, — — не берёт. «Частично» — есть часть продуктов выбранной группы.'],
+  ['Магазинов',rows.length],['Точки вне Еревана',(!S.dist||S.dist==='Вне Еревана')?'включены':'не включены'],['Дата выгрузки',new Date().toLocaleString('ru-RU')],[],
+  ['Как читать', multi?(S.show==='no'?`В список попали ваши магазины, где нет хотя бы одного продукта из «${lab}». Колонка «Чего нет» — что туда добавить. Сверху магазины, где не хватает больше всего.`:'Колонка «Чего нет» — каких продуктов из выбора не хватает в магазине.'):`«НЕТ» — продукта «${lab}» в магазине нет, «Есть» — есть.`],
   ['Источник','Таблица точек Панацеи, колонка «Ապրանքատեսականի». Пустая ячейка считается полной линейкой.']]);
- meta['!cols']=[{wch:22},{wch:80}];
+ meta['!cols']=[{wch:22},{wch:100}];
  XLSX.utils.book_append_sheet(wb,meta,'Фильтры');
- const slug=s=>String(s).replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_').slice(0,30);
- const name=['Panatsea',slug(lab),slug(S.chain||'все_сети'),slug(S.dist||'весь_город'),{all:'все',has:'есть',no:'нет'}[S.show],new Date().toISOString().slice(0,10)].join('_')+'.xlsx';
- XLSX.writeFile(wb,name);
+ const slug=s=>String(s).replace(/[\\/:*?"<>|«»]+/g,'').replace(/\s+/g,'_').slice(0,30);
+ XLSX.writeFile(wb,['Panatsea',slug(lab),slug(S.chain||'все_сети'),slug(S.dist||'весь_город'),{all:'все',has:'есть',no:'нет'}[S.show],new Date().toISOString().slice(0,10)].join('_')+'.xlsx');
 }
 function alertBox(t){const el=document.getElementById('xCount');el.textContent=t;setTimeout(()=>update(),4000)}
 document.getElementById('xBtn').onclick=doExport;
@@ -345,7 +352,8 @@ function update(zoom){
  if(map.hasLayer(gap))gap.draw();
  document.getElementById('legend').innerHTML=`<span>Ваша точка:</span><span><i style="background:${C.strong};border-radius:50%"></i>продукт есть</span>`+(prods().length>1?`<span><i style="background:${C.weak};border:2px solid ${C.strong};border-radius:50%"></i>есть часть</span>`:'')+`<span><i style="background:${C.no};border-radius:50%"></i>продукта нет</span><span><i style="border:2px dashed ${C.no};border-radius:50%"></i>500 м вокруг</span>`;
  const sc=D.ours.filter(inScope);document.getElementById('cHas').textContent='· '+sc.filter(p=>fit(p)>=.999).length;document.getElementById('cNo').textContent='· '+sc.filter(p=>fit(p)<.999).length;
- document.getElementById('xCount').textContent='· '+exportRows().length+' строк';
+ document.getElementById('xCount').textContent='· '+exportRows().length+' магазинов';
+ const hint=document.getElementById('xHint');hint.hidden=!(S.show==='no'&&prods().length>1);hint.textContent=`«Где нет» для группы — магазины, где нет хотя бы одного из ${prods().length} продуктов. Чтобы увидеть, где нет конкретного продукта, выберите его в списке.`;
  renderNo();renderAct();renderMx();renderZn();
  if(zoom){const ps=D.ours.filter(inScope);if(ps.length)map.fitBounds(ps.map(p=>[p.lat,p.lng]),{padding:[40,40],maxZoom:15})}
 }
